@@ -195,7 +195,12 @@ export async function run(config: Config, reporter: Reporter, flags: Object, arg
   const lockfile = await Lockfile.fromDirectory(config.lockfileFolder, reporter);
   const install = new Install(flags, config, reporter, lockfile);
 
-  const {requests: depRequests, patterns, manifest, workspaceLayout} = await install.fetchRequestFromCwd();
+  /**
+   * `install` finds packages that would be installed?
+   * input: flags / config / lockfile
+   * how does it find manifest? is manifest required?
+   */
+  const {requests: depRequests, /* is this top level patterns? */ patterns, /* how is this found? */ manifest, workspaceLayout} = await install.fetchRequestFromCwd();
   await install.resolver.init(depRequests, {
     isFlat: install.flags.flat,
     isFrozen: install.flags.frozenLockfile,

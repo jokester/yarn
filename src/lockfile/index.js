@@ -62,6 +62,7 @@ type MinimalLockManifest = {
   permissions: ?{[key: string]: boolean},
   optionalDependencies: ?Dependencies,
   dependencies: ?Dependencies,
+  // NO prebuiltVariants: ?{[key: string]: string},
 };
 
 export type LockfileObject = {
@@ -86,7 +87,10 @@ function serializeIntegrity(integrity: Integrity): string {
   return integrity.toString().split(' ').sort().join(' ');
 }
 
-export function implodeEntry(pattern: string, obj: Object): MinimalLockManifest {
+/**
+ * called to build LockManifest entry from existed package.json
+ */
+export function implodeEntry(pattern: string, /* */ obj: Object): MinimalLockManifest {
   const inferredName = getName(pattern);
   const integrity = obj.integrity ? serializeIntegrity(obj.integrity) : '';
   const imploded: MinimalLockManifest = {
@@ -106,6 +110,9 @@ export function implodeEntry(pattern: string, obj: Object): MinimalLockManifest 
   return imploded;
 }
 
+/**
+ * called to build LockManifest from lock file
+ */
 export function explodeEntry(pattern: string, obj: Object): LockManifest {
   obj.optionalDependencies = obj.optionalDependencies || {};
   obj.dependencies = obj.dependencies || {};
@@ -187,6 +194,11 @@ export default class Lockfile {
     return new Lockfile({cache: lockfile, source: rawLockfile, parseResultType: parseResult && parseResult.type});
   }
 
+  /**
+   * how is this called?
+   * @param pattern
+   * @returns {?LockManifest|LockManifest|undefined}
+   */
   getLocked(pattern: string): ?LockManifest {
     const cache = this.cache;
     if (!cache) {
@@ -196,8 +208,8 @@ export default class Lockfile {
     const shrunk = pattern in cache && cache[pattern];
 
     if (typeof shrunk === 'string') {
-      return this.getLocked(shrunk);
-    } else if (shrunk) {
+      return this. /* recursive */ getLocked(shrunk);
+    } else if (/* obj */ shrunk) {
       explodeEntry(pattern, shrunk);
       return shrunk;
     }
@@ -213,8 +225,9 @@ export default class Lockfile {
     delete cache[pattern];
   }
 
+  // restore
   getLockfile(patterns: {[packagePattern: string]: Manifest}): LockfileObject {
-    const lockfile = {};
+    const lockfile = {}; // { pattern: Lock }
     const seen: Map<string, Object> = new Map();
 
     // order by name so that lockfile manifest is assigned to the first dependency with this manifest

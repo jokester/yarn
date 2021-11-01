@@ -209,7 +209,7 @@ export class Install {
   rootManifestRegistries: Array<RegistryNames>;
   registries: Array<RegistryNames>;
   lockfile: Lockfile;
-  resolutions: {[packageName: string]: string};
+  resolutions: {[packageName: string]: string}; // = {} from constructor
   config: Config;
   reporter: Reporter;
   resolver: PackageResolver;
@@ -255,20 +255,6 @@ export class Install {
       }
     }
 
-    const stripExcluded = (manifest: Manifest) => {
-      for (const exclude of excludeNames) {
-        if (manifest.dependencies && manifest.dependencies[exclude]) {
-          delete manifest.dependencies[exclude];
-        }
-        if (manifest.devDependencies && manifest.devDependencies[exclude]) {
-          delete manifest.devDependencies[exclude];
-        }
-        if (manifest.optionalDependencies && manifest.optionalDependencies[exclude]) {
-          delete manifest.optionalDependencies[exclude];
-        }
-      }
-    };
-
     for (const registry of Object.keys(registries)) {
       const {filename} = registries[registry];
       const loc = path.join(cwd, filename);
@@ -276,14 +262,21 @@ export class Install {
         continue;
       }
 
+      // when filename === package.json
+      // registry === "npm"
+      // lock = $PWD/package.json
+
       this.rootManifestRegistries.push(registry);
 
       const projectManifestJson = await this.config.readJson(loc);
       await normalizeManifest(projectManifestJson, cwd, this.config, cwdIsRoot);
 
+      // this.resolutions <- (package.json).resolutions
       Object.assign(this.resolutions, projectManifestJson.resolutions);
+      // manifest <- JSON.parse( package.json )
       Object.assign(manifest, projectManifestJson);
 
+      // init this.resolutionMap
       this.resolutionMap.init(this.resolutions);
       for (const packageName of Object.keys(this.resolutionMap.resolutionsByPackage)) {
         const optional = objectPath.has(manifest.optionalDependencies, packageName) && this.flags.ignoreOptional;
@@ -292,10 +285,13 @@ export class Install {
         }
       }
 
+      /**
+       * xxx
+       */
       const pushDeps = (
         depType,
         manifest: Object,
-        {hint, optional}: {hint: ?constants.RequestHint, optional: boolean},
+        {hint, optional}: {hint: /* null | "dev" | "optional" */?constants.RequestHint, optional: boolean},
         isUsed,
       ) => {
         if (ignoreUnusedPatterns && !isUsed) {
@@ -307,8 +303,9 @@ export class Install {
         if (this.flags.flat && !isUsed) {
           return;
         }
-        const depMap = manifest[depType];
+        const depMap = manifest[depType]; // deps map in manifest
         for (const name in depMap) {
+          // skip if package name is in excludeNames (why???)
           if (excludeNames.indexOf(name) >= 0) {
             continue;
           }
@@ -340,68 +337,7 @@ export class Install {
       }
 
       if (this.config.workspaceRootFolder) {
-        const workspaceLoc = cwdIsRoot ? loc : path.join(this.config.lockfileFolder, filename);
-        const workspacesRoot = path.dirname(workspaceLoc);
-
-        let workspaceManifestJson = projectManifestJson;
-        if (!cwdIsRoot) {
-          // the manifest we read before was a child workspace, so get the root
-          workspaceManifestJson = await this.config.readJson(workspaceLoc);
-          await normalizeManifest(workspaceManifestJson, workspacesRoot, this.config, true);
-        }
-
-        const workspaces = await this.config.resolveWorkspaces(workspacesRoot, workspaceManifestJson);
-        workspaceLayout = new WorkspaceLayout(workspaces, this.config);
-
-        // add virtual manifest that depends on all workspaces, this way package hoisters and resolvers will work fine
-        const workspaceDependencies = {...workspaceManifestJson.dependencies};
-        for (const workspaceName of Object.keys(workspaces)) {
-          const workspaceManifest = workspaces[workspaceName].manifest;
-          workspaceDependencies[workspaceName] = workspaceManifest.version;
-
-          // include dependencies from all workspaces
-          if (this.flags.includeWorkspaceDeps) {
-            pushDeps('dependencies', workspaceManifest, {hint: null, optional: false}, true);
-            pushDeps('devDependencies', workspaceManifest, {hint: 'dev', optional: false}, !this.config.production);
-            pushDeps('optionalDependencies', workspaceManifest, {hint: 'optional', optional: true}, true);
-          }
-        }
-        const virtualDependencyManifest: Manifest = {
-          _uid: '',
-          name: `workspace-aggregator-${uuid.v4()}`,
-          version: '1.0.0',
-          _registry: 'npm',
-          _loc: workspacesRoot,
-          dependencies: workspaceDependencies,
-          devDependencies: {...workspaceManifestJson.devDependencies},
-          optionalDependencies: {...workspaceManifestJson.optionalDependencies},
-          private: workspaceManifestJson.private,
-          workspaces: workspaceManifestJson.workspaces,
-        };
-        workspaceLayout.virtualManifestName = virtualDependencyManifest.name;
-        const virtualDep = {};
-        virtualDep[virtualDependencyManifest.name] = virtualDependencyManifest.version;
-        workspaces[virtualDependencyManifest.name] = {loc: workspacesRoot, manifest: virtualDependencyManifest};
-
-        // ensure dependencies that should be excluded are stripped from the correct manifest
-        stripExcluded(cwdIsRoot ? virtualDependencyManifest : workspaces[projectManifestJson.name].manifest);
-
-        pushDeps('workspaces', {workspaces: virtualDep}, {hint: 'workspaces', optional: false}, true);
-
-        const implicitWorkspaceDependencies = {...workspaceDependencies};
-
-        for (const type of constants.OWNED_DEPENDENCY_TYPES) {
-          for (const dependencyName of Object.keys(projectManifestJson[type] || {})) {
-            delete implicitWorkspaceDependencies[dependencyName];
-          }
-        }
-
-        pushDeps(
-          'dependencies',
-          {dependencies: implicitWorkspaceDependencies},
-          {hint: 'workspaces', optional: false},
-          true,
-        );
+        // REMOVED: we dont support workspace now
       }
 
       break;
