@@ -303,6 +303,9 @@ export async function main({
       reporter.warn(reporter.lang('dashDashDeprecation'));
     }
 
+    /**
+     * starts actual command with deps
+     */
     return command.run(config, reporter, commander, commander.args).then(exitCode => {
       if (shouldWrapOutput) {
         reporter.footer(false);
