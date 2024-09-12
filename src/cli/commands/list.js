@@ -50,6 +50,9 @@ export async function buildTree(
 }> {
   const treesByKey = {};
   const trees = [];
+  /**
+   * WTF??
+   */
   const flatTree = await linker.getFlatHoistedTree(patterns);
 
   // If using workspaces, filter out the virtual manifest
@@ -133,7 +136,10 @@ export async function buildTree(
   // add children
   for (const [, info] of hoisted) {
     const tree = treesByKey[info.key];
-    const parent = getParent(info.key, treesByKey);
+    /**
+     * info.key : '#"-joined package names?
+     */
+    const parent = treesByKey[info.key.sliceBefore("#")]
     if (!tree) {
       continue;
     }
@@ -191,17 +197,30 @@ export function getDevDeps(manifest: Object): Set<string> {
   }
 }
 
+/**
+ * @NOTE entrypoint of `yarn list`
+ */
 export async function run(config: Config, reporter: Reporter, flags: Object, args: Array<string>): Promise<void> {
   const lockfile = await Lockfile.fromDirectory(config.lockfileFolder, reporter);
   const install = new Install(flags, config, reporter, lockfile);
 
-  const {requests: depRequests, patterns, manifest, workspaceLayout} = await install.fetchRequestFromCwd();
+  /**
+   * read requests into resolver
+   * @note
+   * `install` finds packages that would be installed?
+   * input: flags / config / lockfile
+   * how does it find manifest? is manifest required?
+   */
+  const {requests: depRequests, /* is this top level patterns? */ patterns, /* how is this found? */ manifest, workspaceLayout} = await install.fetchRequestFromCwd();
   await install.resolver.init(depRequests, {
     isFlat: install.flags.flat,
     isFrozen: install.flags.frozenLockfile,
     workspaceLayout,
   });
 
+  /**
+   * top-most dependencies?
+   */
   let activePatterns = [];
   if (config.production) {
     const devDeps = getDevDeps(manifest);

@@ -11,6 +11,7 @@ export type Package = {
   version: string,
 };
 
+/* is this a type for print?  likely yes */
 export type Tree = {
   name: string,
   children?: Trees,
